@@ -4,7 +4,7 @@
 //
 // It behaves like many such synths. Per-note pitch comes only from VST3 note expressions (tuning, a
 // custom "Pressure" one and volume), and through IMidiMapping it maps pitch bend on MIDI channel 1
-// only, to a global "Pitch Bend" parameter, the way Steinberg's own IMidiMapping example does. JUCE's
+// only, to a global "channel1 pitch bend" parameter, the way Steinberg's own IMidiMapping example does. JUCE's
 // VST3 host turns pitch bend, channel pressure and CCs into parameter changes through IMidiMapping
 // and drops them on channels the synth maps nothing for, so MPE's per-note bends on channels 2-16
 // never reach it as MIDI: a note that glides in a render proves MPE Roll sent its MPE as note
@@ -87,7 +87,8 @@ constexpr double attackSeconds = 0.003, releaseSeconds = 0.01;
 constexpr int32 stateVersion = 1, stateSize = 4;
 constexpr int16 numChannels = 16;
 
-/** The global Pitch Bend parameter: 0.5 is the centre, 0 and 1 are two semitones down and up. */
+/** The global pitch bend parameter ("channel1 pitch bend"): 0.5 is the centre, 0 and 1 are two
+    semitones down and up. */
 double bendToSemitones (double normalised) noexcept   { return (normalised - 0.5) * 2.0 * bendRangeSemitones; }
 double semitonesToBend (double semitones) noexcept    { return std::clamp (semitones / (2.0 * bendRangeSemitones) + 0.5, 0.0, 1.0); }
 
@@ -393,7 +394,8 @@ public:
 
         info = {};
         info.id = pitchBendId;
-        copyString (info.title, "Pitch Bend");
+        // Named as Analog Lab and Kontakt name theirs, which MPE Roll can't tell by the name alone.
+        copyString (info.title, "channel1 pitch bend");
         copyString (info.shortTitle, "Bend");
         copyString (info.units, "st");
         info.stepCount = 0;

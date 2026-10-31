@@ -432,12 +432,20 @@ private:
         void set (int index, float value) noexcept;
 
         /** A parameter that stands for a performance controller (Serum 1's "Pitch Bend" and "Mod
-            Wheel"): the first copy's follows the notes it's sent, so it's not handed on when the
-            synth reports it moved. Host automation of it still reaches every copy. Any thread. */
+            Wheel"), or one the synth maps a MIDI controller or the pitch bend to (setMidiMapped):
+            it follows the notes the synth is sent, so it's not handed on when the synth reports it
+            moved, to the other copies or to the host. Host automation of it still reaches every copy.
+            Any thread. */
         bool isPerformanceControl (int index) const noexcept
         {
-            return juce::isPositiveAndBelow (index, numParameters) && performance[(size_t) index];
+            return juce::isPositiveAndBelow (index, numParameters)
+                && (performance[(size_t) index] || midiMapped[(size_t) index].load (std::memory_order_relaxed));
         }
+
+        /** Which parameters a VST3 synth maps MIDI controllers or the pitch bend to, by their VST3
+            IDs (Vst3Support::midiMappedParameters). Message thread; may change while the synth plays,
+            as its own MPE switch can change the mapping. */
+        void setMidiMapped (const juce::AudioPluginInstance&, const std::vector<uint32_t>& parameterIds);
 
         /** Goes up with every change: for telling whether any parameter moved. */
         uint32_t getChanges() const noexcept                { return changes.load (std::memory_order_acquire); }
@@ -472,6 +480,7 @@ private:
         std::unique_ptr<std::atomic<uint32_t>[]> stamps;    // each parameter's last change, counted in changes
         std::vector<bool> copied;                       // which parameters are copied at all
         std::vector<bool> performance;                  // see isPerformanceControl()
+        std::unique_ptr<std::atomic<bool>[]> midiMapped;    // ...and setMidiMapped(): read on the audio thread
         std::atomic<uint32_t> changes { 0 }, lastLeadPlayed { 0 };
         int numParameters = 0, numChunks = 0;
     };

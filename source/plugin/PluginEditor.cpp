@@ -492,7 +492,7 @@ void MpeRollEditor::timerCallback()
 
     // A glide that stopped short at a bend range's edge: the status line says so while it's recent.
     if (const auto over = rollProcessor.getRecentBendOverflow();
-        over.asked != shownBendOverflow.asked || over.range != shownBendOverflow.range)
+        ! juce::exactlyEqual (over.asked, shownBendOverflow.asked) || ! juce::exactlyEqual (over.range, shownBendOverflow.range))
     {
         shownBendOverflow = over;
         refreshToolbar();

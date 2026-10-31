@@ -1879,6 +1879,58 @@ int vst3DialectTest (const juce::File& noteExpressionSynth, const juce::File& mi
     check (stopAndListen() < 1.0e-4f, "nor one held while they went off");
     setNoteExpressions (true);
 
+    std::printf ("The synth's pitch-bend parameter following the notes isn't a knob tweak to the host\n");
+    {
+        // Analog Lab and Kontakt map each channel's pitch bend to a parameter of their own ("channel1
+        // pitch bend"...), which JUCE moves with every bend MPE Roll sends. Reported to FL as a change,
+        // each bend would fill its undo history and record as automation: MPE Roll tells such a
+        // parameter by the synth's MIDI mapping, not by its name.
+        setNoteExpressions (false);     // over MIDI, a zone bend goes to the synth's pitch bend on channel 1
+        juce::AudioProcessorParameter* bendSlot = nullptr;
+
+        for (auto* p : processor.getParameters())
+            if (p->getName (100) == "channel1 pitch bend")
+                bendSlot = p;
+
+        check (bendSlot != nullptr, "the synth's channel1 pitch bend is one of MPE Roll's parameters");
+
+        struct HeardByHost : juce::AudioProcessorParameter::Listener
+        {
+            void parameterValueChanged (int, float) override        { ++changes; }
+            void parameterGestureChanged (int, bool) override       {}
+            int changes = 0;
+        };
+
+        HeardByHost heard;
+
+        if (bendSlot != nullptr)
+            bendSlot->addListener (&heard);
+
+        MpeClip clip;
+        clip.length = 8.0;
+        clip.addNote (note (60, 0.0, 8.0, 0.8f));
+        clip.zone.pitch = { { 0.0, 0.0f }, { 2.0, 1.0f } };     // the zone bends up a semitone over two beats
+        processor.getDocument().replaceClip (0, clip, "Test");
+
+        playHead.playing = false;
+        double ppq = 0.0;
+        runBlock (processor, playHead, ppq);
+        playHead.playing = true;
+        playHead.ppq = 0.0;
+        play (0.0f, 40, false);
+
+        const auto synthBend = synth.getInstance() != nullptr ? synth.getInstance()->getParameters()[0]->getValue() : 0.5f;
+        std::printf ("  the synth's parameter is at %.3f; the host heard %d change(s)\n", (double) synthBend, heard.changes);
+        check (std::abs (synthBend - 0.5f) > 0.05f, "the synth's own parameter moved with the bend");
+        check (heard.changes == 0, "and the host heard nothing of it");
+
+        if (bendSlot != nullptr)
+            bendSlot->removeListener (&heard);
+
+        stopAndListen();
+        setNoteExpressions (true);
+    }
+
     std::printf ("A zone bend that went as MIDI doesn't stay on the synth once note expressions are back\n");
     {
         // A held C4 with the zone bent up a semitone. Over MIDI the synth takes the zone's bend on

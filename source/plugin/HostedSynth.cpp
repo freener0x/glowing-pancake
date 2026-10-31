@@ -1014,6 +1014,11 @@ void HostedSynth::refreshVst3Support()
     vst3Support = support;
     vst3Expressions.setSupport (support);
 
+    // The parameters its MIDI mapping names follow the MIDI it's sent (each channel's pitch bend, in
+    // Analog Lab and Kontakt): a change in one isn't a knob tweak for the host's undo history or
+    // automation, nor something the other copies are given.
+    mirror.setMidiMapped (*instance, support.midiMappedParameters);
+
     if (support.isVst3)
         PluginLog::add ("  " + getName() + ", " + support.describe()
                         + (support.wantsNoteExpressions() && Vst3NoteExpressions::isAvailable()
@@ -1712,6 +1717,7 @@ void HostedSynth::ParameterMirror::setUp (const juce::Array<juce::AudioProcessor
     versions = std::make_unique<std::atomic<uint32_t>[]> ((size_t) numParameters);
     chunkVersions = std::make_unique<std::atomic<uint32_t>[]> ((size_t) numChunks);
     stamps = std::make_unique<std::atomic<uint32_t>[]> ((size_t) numParameters);
+    midiMapped = std::make_unique<std::atomic<bool>[]> ((size_t) numParameters);
     copied.assign ((size_t) numParameters, false);
     performance.assign ((size_t) numParameters, false);
     lastLeadPlayed = 0;
@@ -1721,6 +1727,20 @@ void HostedSynth::ParameterMirror::setUp (const juce::Array<juce::AudioProcessor
         auto* p = parameters.getUnchecked (i);
         copied[(size_t) i] = p->isAutomatable() && p != bypass;
         performance[(size_t) i] = namesPerformanceControl (p->getName (64));
+        midiMapped[(size_t) i].store (false, std::memory_order_relaxed);
+    }
+}
+
+void HostedSynth::ParameterMirror::setMidiMapped (const juce::AudioPluginInstance& plugin, const std::vector<uint32_t>& parameterIds)
+{
+    // JUCE's VST3 parameters give their VST3 ID as their parameter ID string.
+    for (int i = 0; i < juce::jmin (numParameters, plugin.getParameters().size()); ++i)
+    {
+        const auto* hosted = plugin.getHostedParameter (i);
+        const auto id = hosted != nullptr ? hosted->getParameterID() : juce::String();
+        const auto mapped = ! parameterIds.empty() && id.isNotEmpty() && id.containsOnly ("0123456789")
+                         && std::binary_search (parameterIds.begin(), parameterIds.end(), (uint32_t) id.getLargeIntValue());
+        midiMapped[(size_t) i].store (mapped, std::memory_order_relaxed);
     }
 }
 

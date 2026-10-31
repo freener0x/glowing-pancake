@@ -2,8 +2,10 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace mperoll
 {
@@ -33,6 +35,17 @@ struct Vst3Support
     int channelsWithOwnBend = 0;            // ... one no other channel shares
     bool ownBendOnMemberChannels = false;   // channels 2-16 each have their own: MPE over MIDI reaches notes one by one
     int channelsWithPressure = 0, channelsWithTimbre = 0;
+
+    // The parameters (VST3 IDs, sorted) a MIDI controller, the pitch bend or aftertouch is mapped to
+    // on any channel: JUCE moves them with the MIDI MPE Roll sends, so they follow the notes
+    // (Kontakt's and Analog Lab's "channel1 pitch bend"... "channel16 pitch bend").
+    std::vector<uint32_t> midiMappedParameters;
+
+    /** Whether a parameter, by its VST3 ID, is one a MIDI controller or the pitch bend is mapped to. */
+    bool isMidiMapped (uint32_t parameterId) const noexcept
+    {
+        return std::binary_search (midiMappedParameters.begin(), midiMappedParameters.end(), parameterId);
+    }
 
     std::array<uint32_t, numExpressions> typeIds;   // the VST3 note expression type for each, or noType
     std::array<bool, numExpressions> scaled {};      // a custom type from the physical UI mapping: 0..1 goes to minimum..maximum

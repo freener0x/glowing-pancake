@@ -146,6 +146,17 @@ Vst3Support Vst3Support::probe (juce::AudioPluginInstance& plugin)
             if (channel > 0 && ! own)
                 s.ownBendOnMemberChannels = false;
         }
+
+        // Every parameter any controller is mapped to, on any channel: they follow the MIDI the synth
+        // is sent, so a change in one isn't an edit to tell the host about.
+        for (Vst::CtrlNumber number = 0; number < Vst::kCountCtrlNumber; ++number)
+            for (const auto id : mappingsOf (*mapping, number))
+                if (id != Vst::kNoParamId)
+                    s.midiMappedParameters.push_back ((uint32_t) id);
+
+        std::sort (s.midiMappedParameters.begin(), s.midiMappedParameters.end());
+        s.midiMappedParameters.erase (std::unique (s.midiMappedParameters.begin(), s.midiMappedParameters.end()),
+                                      s.midiMappedParameters.end());
     }
 
     FUnknownPtr<Vst::INoteExpressionController> expressions (controller);
